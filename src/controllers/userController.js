@@ -1,14 +1,13 @@
 import userModel from "../models/userModel.js"
+import bcrypt from 'bcrypt'
+import jwt from 'jsonwebtoken'
 
 // register user 
 export const registerUser = async (req, res, next) => {
     try {
         const { username, email, password } = req.body
-        console.log("username", username)
-        console.log("email", email)
-        console.log("password", password)
-        if (!username || email || password) {
-            return res.statue(400).send({
+        if (!username || !email || !password) {
+            return res.status(400).send({
                 message: "Please fill all fields",
                 success: false
             })
@@ -16,21 +15,22 @@ export const registerUser = async (req, res, next) => {
         // check existing user 
         const existingUser = await userModel.findOne({ email })
         if (existingUser) {
-            return res.statue(401).send({
+            return res.status(401).send({
                 message: "User Already exists",
                 success: false
             })
         }
-        const newUser = new userModel({ username, email, password })
+        const hashedPassword = await bcrypt.hash(password, 10)
+        const newUser = new userModel({ username, email, password: hashedPassword })
         await newUser.save()
-        return res.statue(201).send({
+        return res.status(201).send({
             message: "New User Created",
-            success: false,
+            success: true,
             newUser
         })
     } catch (error) {
-        console.log(error)
-        return res.statue(500).send({
+
+        return res.status(500).send({
             message: "Error in register",
             success: false,
             error
@@ -39,7 +39,67 @@ export const registerUser = async (req, res, next) => {
 }
 
 // get all user 
-export const getAllUser = () => { }
+export const getAllUser = async (req, res, next) => {
+    try {
+        const users = await userModel.find({})
+        return res.status(200).send({
+            message: "all users",
+            success: true,
+            users
+        })
+
+    } catch (error) {
+
+        return res.status(500).send({
+            message: "Error in get all user",
+            success: false,
+            error
+        })
+    }
+}
 
 // login user 
-export const loginUser = () => { }
+export const loginUser = async (req, res, next) => {
+    try {
+        const { email, password } = req.body
+        if (!email || !password) {
+            return res.status(400).send({
+                message: "Please fill all fields",
+                success: false
+            })
+        }
+        const user = await userModel.findOne({ email })
+
+        if (!user) {
+            return res.status(200).send({
+                message: "email nor registered",
+                success: false
+            })
+        }
+        const isMatched = await bcrypt.compare(password, user.password)
+        if (!isMatched) {
+            return res.status(401).send({
+                message: "invalid credential",
+                success: false
+            })
+        }
+        const tokenData = {
+            id: user._id
+        }
+
+        const token = await jwt.sign(tokenData, process.env.JWT_SECRET, { expiresIn: process.env.JWT_EXPIRE_TIME })
+        return res.status(200).send({
+            message: "login success",
+            success: true,
+            token,
+            user
+        })
+    } catch (error) {
+
+        return res.status(500).send({
+            message: "Error in get login",
+            success: false,
+            error
+        })
+    }
+}
